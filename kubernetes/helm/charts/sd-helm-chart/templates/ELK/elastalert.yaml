@@ -1,16 +1,15 @@
+{{- if  and (eq (include "elk.enabled" .) "true")  (.Values.elk.elastalert.enabled) }}
 
-{{- if (.Values.elk.enabled) }}
-{{- if  (.Values.elk.elastalert_enabled)  }}
 apiVersion: v1
 kind: ConfigMap
 metadata:
   labels:
     app: elastalert
   name: elastalert-configyaml
-  namespace: {{.Values.monitoringNamespace}}
+  namespace: {{ template "monitoring.namespace" . }}
 data:
   elastalert_config: |
-    es_host: elasticsearch-service.{{.Values.monitoringNamespace}}.svc
+    es_host: {{.Values.elk.elastalert.elkserver}}
     es_port: 9200
     rules_folder: /rules
     run_every:
@@ -28,12 +27,12 @@ data:
 
 
 
-{{- if  (.Values.elk.elastalert_enabled)  }}
+{{- if  and (eq (include "elk.enabled" .) "true")  (.Values.elk.elastalert.enabled) }}
 apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: elastalert
-  namespace: {{.Values.monitoringNamespace}}
+  namespace: {{ template "monitoring.namespace" . }}
   labels:
     app: elastalert
 spec:
@@ -46,9 +45,14 @@ spec:
       labels:
         app: elastalert
     spec:
+      {{- if .Values.securityContext.enabled }}
+      securityContext:
+        fsGroup: {{ .Values.securityContext.fsGroup }}
+        runAsUser: {{ .Values.securityContext.runAsUser }}
+      {{- end }}
       containers:
       - image: bitsensor/elastalert:2.0.0
-        imagePullPolicy: IfNotPresent
+        imagePullPolicy: {{.Values.elk.pullPolicy}}
         name: elastalert
         ports:
         - containerPort: 3030
@@ -73,11 +77,7 @@ spec:
           periodSeconds: 10
           timeoutSeconds: 5
           successThreshold: 1
-          failureThreshold: 6      
-{{- if .Values.securityContext.enabled }}
-        securityContext:
-          runAsUser: {{ .Values.securityContext.runAsUser }}
-{{- end }}                        
+          failureThreshold: 6
         volumeMounts:
         - name: elastalertconfigyaml
           mountPath: /opt/elastalert/config.yaml
@@ -116,18 +116,18 @@ spec:
       initContainers:
       - name: waitforelk
         image: busybox
-        command: ['sh', '-c', "while ! wget --server-response -T 3 http://elasticsearch-service.{{.Values.monitoringNamespace}}.svc:9200/_cluster/health?pretty=true; do echo waiting for elk; sleep 2; done"]
+        command: ['sh', '-c', "while ! wget --server-response -T 3 http://elasticsearch-service.{{ .Release.Namespace }}.svc:9200/_cluster/health?pretty=true; do echo waiting for elk; sleep 2; done"]
 
   
 {{- end }}
 ---
-{{- if  (.Values.elk.elastalert_enabled)  }}
+{{- if  and (eq (include "elk.enabled" .) "true")  (.Values.elk.elastalert.enabled) }}
 
 apiVersion: v1
 kind: Service
 metadata:
   name: elastalert-service
-  namespace: {{.Values.monitoringNamespace}}
+  namespace: {{ template "monitoring.namespace" . }}
   labels:
     app: elastalert-service
 spec:
@@ -144,4 +144,4 @@ spec:
   selector:
     app: elastalert
 {{- end }}
-{{- end }}
+

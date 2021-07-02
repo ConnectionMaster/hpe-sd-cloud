@@ -1,9 +1,9 @@
-{{- if  and (.Values.elk.enabled)  (.Values.elk.elastic.enabled)  (.Values.elk.kibana.enabled)  }}
+{{- if  and (eq (include "elk.enabled" .) "true")  (.Values.elk.elastic.enabled)  (.Values.elk.kibana.enabled)  }}
 apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: kibana
-  namespace: {{.Values.monitoringNamespace}}
+  namespace: {{ template "monitoring.namespace" . }}
 spec:
   replicas: 1
   selector:
@@ -14,10 +14,15 @@ spec:
       labels:
         app: kibana
     spec:
+    {{- if .Values.securityContext.enabled }}
+      securityContext:
+        fsGroup: {{ .Values.securityContext.fsGroup }}
+        runAsUser: {{ .Values.securityContext.runAsUser }}
+    {{- end }}
       containers:
       - name: kibana
         image: docker.elastic.co/kibana/kibana:{{.Values.elk.version}}
-        imagePullPolicy: IfNotPresent
+        imagePullPolicy: {{.Values.elk.pullPolicy}}
         env:
           - name: ELASTICSEARCH_HOSTS
             value: http://elasticsearch-service:9200
@@ -25,16 +30,6 @@ spec:
         - containerPort: 5601
           name: ui
           protocol: TCP
-        startupProbe:
-          exec:
-            command:
-              - sh
-              - -c
-              - |
-                #!/usr/bin/env bash -e
-                curl --fail http://elasticsearch-service:9200/_cluster/health
-          failureThreshold: 10
-          periodSeconds: 20
         livenessProbe:
           httpGet:
             path: /app/kibana
@@ -42,7 +37,7 @@ spec:
           periodSeconds: 10
           timeoutSeconds: 5
           successThreshold: 1
-          failureThreshold: 6
+          failureThreshold: 12
         readinessProbe:
           httpGet:
             path: /app/kibana
@@ -50,11 +45,7 @@ spec:
           periodSeconds: 10
           timeoutSeconds: 5
           successThreshold: 1
-          failureThreshold: 6  
-{{- if .Values.securityContext.enabled }}
-        securityContext:
-          runAsUser: {{ .Values.securityContext.runAsUser }}
-{{- end }}  
+          failureThreshold: 6
         resources:
           requests:
             memory: {{.Values.elk.kibana.memoryrequested}}
@@ -68,12 +59,12 @@ spec:
 {{- end }}           
 {{- end }}
 ---
-{{- if  and (.Values.elk.enabled)  (.Values.elk.elastic.enabled)  (.Values.elk.kibana.enabled)  }}
+{{- if  and (eq (include "elk.enabled" .) "true")  (.Values.elk.elastic.enabled)  (.Values.elk.kibana.enabled)  }}
 apiVersion: v1
 kind: Service
 metadata:
   name: kibana-service
-  namespace: {{.Values.monitoringNamespace}}
+  namespace: {{ template "monitoring.namespace" . }}
   labels:
     app: kibana-service
 spec:

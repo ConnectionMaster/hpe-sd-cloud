@@ -1,11 +1,12 @@
-{{- if  (.Values.prometheus.enabled)  }}
+{{- if  (eq (include "prometheus.enabled" .) "true")  }}
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
   labels:
-    app.kubernetes.io/name: kube-state-metrics
+    app.kubernetes.io/name: sd-kube-state-metrics
     app.kubernetes.io/version: v1.8.0
-  name: kube-state-metrics
+  name: sd-kube-state-metrics
+  namespace: {{ template "monitoring.namespace" . }}
 rules:
 - apiGroups:
   - ""

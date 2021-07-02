@@ -1,9 +1,9 @@
-{{- if  and  (.Values.prometheus.enabled) (.Values.prometheus.server_enabled) }}
+{{- if  and  (eq (include "prometheus.enabled" .) "true") (.Values.prometheus.server_enabled) }}
 apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: prometheus-deployment
-  namespace: {{.Values.monitoringNamespace}}
+  namespace: {{ template "monitoring.namespace" . }}
 spec:
   replicas: 1
   selector:
@@ -16,7 +16,8 @@ spec:
     spec:
       containers:
         - name: prometheus
-          image: prom/prometheus:v2.2.1
+          image: prom/prometheus:v2.25.0
+          imagePullPolicy: {{.Values.prometheus.pullPolicy}}
           args:
             - "--config.file=/etc/prometheus/prometheus.yml"
             - "--storage.tsdb.path=/prometheus/"
@@ -24,13 +25,13 @@ spec:
             - containerPort: 9090
           startupProbe:
             httpGet:
-              path: /-/ready
+              path: /-/healthy
               port: 9090
             failureThreshold: 10
             periodSeconds: 20
           livenessProbe:
             httpGet:
-              path: /-/ready
+              path: /-/healthy
               port: 9090
             periodSeconds: 10
             failureThreshold: 5
@@ -47,20 +48,20 @@ spec:
               mountPath: /prometheus/
 {{- if  (.Values.prometheus.alertmanager_enabled)  }}
             - name: alertmanager-rules-volume
-              mountPath: /alerts/                 
+              mountPath: /alerts/
 {{- end }}
           resources:
             requests:
               memory: {{.Values.prometheus.memoryrequested}}
               cpu: {{.Values.prometheus.cpurequested}}
             limits:
-{{- if (.Values.prometheus.memorylimit ) }}                 
+{{- if (.Values.prometheus.memorylimit ) }}
               memory: {{ .Values.prometheus.memorylimit }}
-{{- end }}                  
-{{- if (.Values.prometheus.cpulimit ) }} 
-              cpu: {{ .Values.prometheus.cpulimit }} 
-{{- end }}   
-{{- if  (.Values.prometheus.alertmanager_enabled)  }} 
+{{- end }}
+{{- if (.Values.prometheus.cpulimit ) }}
+              cpu: {{ .Values.prometheus.cpulimit }}
+{{- end }}
+{{- if  (.Values.prometheus.alertmanager_enabled)  }}
         - name: alertmanager
           image: prom/alertmanager:v0.21.0
           args:
@@ -71,15 +72,15 @@ spec:
             containerPort: 9093
           volumeMounts:
             - name: alertmanager-config-volume
-              mountPath: /etc/alertmanager/               
- 
+              mountPath: /etc/alertmanager/
+
 {{- end }}
       volumes:
         - name: prometheus-config-volume
           configMap:
             defaultMode: 420
             name: prometheus-server-conf
-{{- if  (.Values.prometheus.alertmanager_enabled)  }}             
+{{- if  (.Values.prometheus.alertmanager_enabled)  }}
         - name: alertmanager-rules-volume
           configMap:
             defaultMode: 420
@@ -87,18 +88,18 @@ spec:
         - name: alertmanager-config-volume
           configMap:
             defaultMode: 420
-            name: alertmanager-config            
-{{- end }}     
+            name: alertmanager-config
+{{- end }}
         - name: prometheus-storage-volume
           emptyDir: {}
 {{- end }}
 ---
-{{- if  and  (.Values.prometheus.enabled) (.Values.prometheus.server_enabled) }}
+{{- if  and  (eq (include "prometheus.enabled" .) "true") (.Values.prometheus.server_enabled) }}
 apiVersion: v1
 kind: Service
 metadata:
   name: prometheus-service
-  namespace: {{.Values.monitoringNamespace}}
+  namespace: {{ template "monitoring.namespace" . }}
   annotations:
       prometheus.io/scrape: 'true'
       prometheus.io/port:   '9090'
@@ -109,27 +110,27 @@ spec:
   type: {{ .Values.prometheus.servicetype | quote }}
   {{- if and (eq .Values.prometheus.servicetype "LoadBalancer") (not (empty .Values.prometheus.loadBalancerIP)) }}
   loadBalancerIP: {{ .Values.prometheus.loadBalancerIP }}
-  {{- end }}   
+  {{- end }}
   ports:
     - port: 8080
       targetPort: 9090
       {{- if and (or (eq .Values.prometheus.servicetype "NodePort") (eq .Values.prometheus.servicetype "LoadBalancer")) (not (empty .Values.prometheus.nodePort)) }}
       nodePort: {{ .Values.prometheus.nodePort }}
-      {{- end }}         
-      
+      {{- end }}
+
 {{- end }}
 
-{{- if and (.Values.prometheus.enabled) (.Values.prometheus.alertmanager_enabled) }}
+{{- if and (eq (include "prometheus.enabled" .) "true") (.Values.prometheus.alertmanager_enabled) }}
 ---
 apiVersion: v1
 kind: Service
 metadata:
   name: alertmanager
-  namespace: {{.Values.monitoringNamespace}}
+  namespace: {{ template "monitoring.namespace" . }}
 spec:
-  selector: 
+  selector:
     app: prometheus-server
-  type: NodePort  
+  type: NodePort
   ports:
     - port: 9093
       targetPort: 9093

@@ -1,9 +1,9 @@
-{{- if  (.Values.prometheus.enabled)  }}
-apiVersion: rbac.authorization.k8s.io/v1beta1
+{{- if  (eq (include "prometheus.enabled" .) "true")  }}
+apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
   name: prometheus
-  namespace: {{.Values.monitoringNamespace}}
+  namespace: {{ template "monitoring.namespace" . }}
 rules:
 - apiGroups: [""]
   resources:
@@ -22,12 +22,12 @@ rules:
   verbs: ["get"]
 {{- end }}
 ---
-{{- if  (.Values.prometheus.enabled)  }}
-apiVersion: rbac.authorization.k8s.io/v1beta1
+{{- if  (eq (include "prometheus.enabled" .) "true")  }}
+apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
 metadata:
   name: prometheus
-  namespace: {{.Values.monitoringNamespace}}
+  namespace: {{ template "monitoring.namespace" . }}
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: ClusterRole
@@ -35,5 +35,5 @@ roleRef:
 subjects:
 - kind: ServiceAccount
   name: default
-  namespace: {{.Values.monitoringNamespace}}
+  namespace: {{ template "monitoring.namespace" . }}
 {{- end }}

@@ -9,32 +9,41 @@ LABEL org.label-schema.vendor="Hewlett Packard Enterprise"
 
 # Install PostgreSQL repository
 
-RUN yum install -y https://download.postgresql.org/pub/repos/yum/reporpms/EL-7-x86_64/pgdg-redhat-repo-latest.noarch.rpm && \
-    yum clean all && rm -rf /var/cache/yum
+RUN dnf install -y https://download.postgresql.org/pub/repos/yum/reporpms/EL-8-x86_64/pgdg-redhat-repo-latest.noarch.rpm && \
+    dnf -qy module disable postgresql && \
+    dnf clean all && rm -fr /var/cache/dnf
 
 # Install dependencies for Service Provisioner
 
-RUN yum install -y java-11-openjdk-devel && \
-    yum clean all && rm -rf /var/cache/yum
+RUN dnf install -y \
+                java-11-openjdk-devel \
+                jq \
+                python3 \
+                python3-lxml \
+                python3-pyyaml \
+                && \
+    dnf clean all && rm -fr /var/cache/dnf
+
+# Set Python 3.x as the default /usr/bin/python
+
+RUN alternatives --set python /usr/bin/python3
 
 # Install dependencies for UOC
 
-RUN curl -sL https://rpm.nodesource.com/setup_12.x | bash -
-
 ADD ./assets/couchdb/repo /etc/yum.repos.d/bintray-apache-couchdb-rpm.repo
 
-RUN yum install -y \
+RUN dnf install -y \
                 couchdb \
                 fontconfig \
                 freetype \
-                nodejs \
+                @nodejs:12 \
                 && \
-    yum clean all && rm -rf /var/cache/yum
+    dnf clean all && rm -fr /var/cache/dnf
 
 # Install PostgreSQL
 
-RUN yum install -y postgresql11-server && \
-    yum clean all && rm -rf /var/cache/yum
+RUN dnf install -y postgresql11-server && \
+    dnf clean all && rm -fr /var/cache/dnf
 
 # Copy SD ISO contents
 
@@ -50,7 +59,14 @@ COPY ./assets/ansible /docker/ansible
 
 # Install components with Ansible
 
-RUN cd /docker/ansible && ansible-playbook -vvvv install.yml -c local -i localhost,
+RUN cd /docker/ansible && \
+    ansible-playbook -vvvv install.yml -c local -i localhost, && \
+    dnf clean all && rm -fr /var/cache/dnf && \
+    rm -fr \
+        /var/opt/OV/ServiceActivator/patch/* \
+        /var/opt/OV/ServiceActivator/log/* \
+    && \
+    find /var/log -type f -delete
 
 # Remove ISO contents from image
 
@@ -71,8 +87,6 @@ ARG prepared=false
 ENV PGDATA=/pgdata
 ENV PGPASSWORD=secret
 
-RUN if test $prepared = true; then /docker/scripts/setup/01_config_pgsql.sh && rm /docker/scripts/setup/01_config_pgsql.sh && /docker/stop_pgsql.sh; fi
-
 # Copy init scripts
 
 COPY ./assets/initscripts/couchdb /etc/init.d/
@@ -80,11 +94,15 @@ COPY ./assets/initscripts/kafka /etc/init.d/
 COPY ./assets/initscripts/zookeeper /etc/init.d/
 COPY ./assets/initscripts/activator /etc/init.d/
 
-# Configure SD
+# Copy SD configuration script
 
 COPY ./assets/scripts/setup/02_config_sd.sh /docker/scripts/setup/02_config_sd.sh
 
-RUN if test $prepared = true; then /docker/scripts/setup/02_config_sd.sh && rm /docker/scripts/setup/02_config_sd.sh && /docker/stop_pgsql.sh; fi
+# Prepare image if requested
+
+COPY ./assets/prepare.sh /docker/prepare.sh
+
+RUN if test $prepared = true; then /docker/prepare.sh; fi
 
 # Copy startup and healthcheck scripts
 

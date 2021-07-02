@@ -1,9 +1,9 @@
-{{- if  (.Values.elk.enabled)  }}
+{{- if  and (eq (include "elk.enabled" .) "true")    (.Values.elk.logstash.enabled)  }}
 apiVersion: v1
 kind: ConfigMap
 metadata:
   name: logstash-config
-  namespace: {{.Values.monitoringNamespace}}
+  namespace: {{ template "monitoring.namespace" . }}
   labels:
     app: logstash
 data:
@@ -17,7 +17,7 @@ data:
         port => 5044
       }
       redis {
-        host => "redis-master.{{ .Values.servicedirectorNamespace }}.svc.cluster.local"
+        host => "redis-master.{{ .Release.Namespace }}.svc.cluster.local"
         password => "secret"
         type => "redis-input"
         data_type => "pattern_channel"
@@ -75,7 +75,11 @@ data:
       }     
       if [type] == "wildfly" {
         grok {
+{{- if and (.Values.sdimage.env.SDCONF_activator_conf_file_log_pattern) (.Values.elk.logstash.sdsp_grokpattern) }}
+          match => { "message" => {{ .Values.elk.logstash.sdsp_grokpattern }} }
+{{- else }}
           match => { "message" => "%{TIMESTAMP_ISO8601:timestamp} %{NOTSPACE:loglevel}\s+\[(?<logger>[^\]]+)\] \((?<thread>.+?(?=\) ))\) %{GREEDYDATA:message}" }
+{{- end }}
             overwrite => [ "timestamp", "message" ]
         }
         date {
@@ -117,7 +121,11 @@ data:
       }
       if [type] == "uoc" {
         grok {
+{{- if and (.Values.sdui_image.env.SDCONF_sdui_log_format_pattern) (.Values.elk.logstash.sdui_grokpattern) }}
+          match => { "message" => {{ .Values.elk.logstash.sdui_grokpattern }} }
+{{- else }}
           match => { "message" => "\[%{TIMESTAMP_ISO8601:timestamp}\] \[%{NOTSPACE:loglevel}\]\s+%{NOTSPACE:logger} - %{GREEDYDATA:message}" }
+{{- end }}
           overwrite => [ "timestamp", "message" ]
         }
         date {
@@ -139,12 +147,12 @@ data:
 
 {{- end }}
 ---
-{{- if  (.Values.elk.enabled)  }}
+{{- if  and (eq (include "elk.enabled" .) "true")    (.Values.elk.logstash.enabled)  }}
 apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: logstash-logging
-  namespace: {{.Values.monitoringNamespace}}
+  namespace: {{ template "monitoring.namespace" . }}
 spec:
   replicas: 1
   selector:
@@ -155,10 +163,15 @@ spec:
       labels:
         app: logstash
     spec:
+    {{- if .Values.securityContext.enabled }}
+      securityContext:
+        fsGroup: {{ .Values.securityContext.fsGroup }}
+        runAsUser: {{ .Values.securityContext.runAsUser }}
+    {{- end }}
       containers:
       - name: logstash
         image: docker.elastic.co/logstash/logstash:{{.Values.elk.version}}
-        imagePullPolicy: IfNotPresent
+        imagePullPolicy: {{.Values.elk.pullPolicy}}
         volumeMounts:
         - mountPath: /usr/share/logstash/config
           name: config        
@@ -172,35 +185,37 @@ spec:
           name: apiweb
           protocol: TCP             
         startupProbe:
-          httpGet:
-            path: /
-            port: apiweb
-            scheme: HTTP
+          httpGet: null
+          exec:
+            command:
+            - curl
+            - localhost:9600
           failureThreshold: 10
-          periodSeconds: 20        
+          periodSeconds: 20
+          initialDelaySeconds: 30
+          timeoutSeconds: 5     
         livenessProbe:
-          httpGet:
-            path: /
-            port: apiweb
-            scheme: HTTP
+          httpGet: null
+          exec:
+            command:
+            - curl
+            - localhost:9600
+          periodSeconds: 10
+          timeoutSeconds: 5
+          successThreshold: 1
+          failureThreshold: 10
+          initialDelaySeconds: 30
+        readinessProbe:
+          httpGet: null
+          exec:
+            command:
+            - curl
+            - localhost:9600
           periodSeconds: 10
           timeoutSeconds: 5
           successThreshold: 1
           failureThreshold: 6
-        readinessProbe:
-          httpGet:
-            path: /
-            port: apiweb
-            scheme: HTTP
-          periodSeconds: 10
-          timeoutSeconds: 5
-          successThreshold: 1
-          failureThreshold: 6    
-          
-{{- if .Values.securityContext.enabled }}
-        securityContext:
-          runAsUser: {{ .Values.securityContext.runAsUser }}
-{{- end }}  
+          initialDelaySeconds: 30
         resources:
           requests:
             memory: {{.Values.elk.logstash.memoryrequested}}
@@ -227,12 +242,12 @@ spec:
             path: logstash.conf
 {{- end }}
 ---
-{{- if  (.Values.elk.enabled)  }}
+{{- if  and (eq (include "elk.enabled" .) "true")   (.Values.elk.logstash.enabled)  }}
 apiVersion: v1
 kind: Service
 metadata:
   name: logstash-service
-  namespace: {{.Values.monitoringNamespace}}
+  namespace: {{ template "monitoring.namespace" . }}
   labels:
     app: logstash-service  
 spec:

@@ -1,9 +1,9 @@
-{{- if  (.Values.prometheus.enabled)  }}
+{{- if  (eq (include "prometheus.enabled" .) "true")  }}
 apiVersion: v1
 kind: ConfigMap
 metadata:
   name: redismetrics
-  namespace: {{.Values.monitoringNamespace}}
+  namespace: {{ template "monitoring.namespace" . }}
 
 data:
   Redis-metrics.json: |-

@@ -9,8 +9,8 @@ LABEL org.label-schema.vendor="Hewlett Packard Enterprise"
 
 # Install dependencies for SNMP adapter
 
-RUN yum install -y java-11-openjdk-devel && \
-    yum clean all && rm -rf /var/cache/yum
+RUN dnf install -y java-11-openjdk-devel && \
+    dnf clean all && rm -fr /var/cache/dnf
 
 # Copy SD ISO binaries
 
@@ -26,11 +26,19 @@ COPY ./assets/ansible /docker/ansible
 
 # Install components with Ansible
 
-RUN cd /docker/ansible && ansible-playbook -vvvv install.yml -c local -i localhost,
+RUN cd /docker/ansible && \
+    ansible-playbook -vvvv install.yml -c local -i localhost, && \
+    dnf clean all && rm -fr /var/cache/dnf && \
+    chmod -R go=u,a+w \
+    /opt/sd-asr
 
 # Remove ISO contents from image
 
 RUN rm -fr /docker/iso
+
+# Allow creation of PIDfile
+
+RUN chmod a+w /run
 
 # Copy startup scripts
 

@@ -1,9 +1,9 @@
-{{- if  and  (.Values.prometheus.enabled)  (.Values.prometheus.server_enabled) (.Values.prometheus.grafana.enabled) }}
+{{- if  and  (eq (include "prometheus.enabled" .) "true")  (.Values.prometheus.server_enabled) (.Values.prometheus.grafana.enabled) }}
 apiVersion: apps/v1
 kind: StatefulSet
 metadata:
   name: grafana
-  namespace: {{.Values.monitoringNamespace}}
+  namespace: {{ template "monitoring.namespace" . }}
 spec:
   replicas: 1
   serviceName: grafana
@@ -16,41 +16,25 @@ spec:
         app: grafana
     spec:
       containers:
-        - image: grafana/grafana
+        - image: grafana/grafana:{{.Values.prometheus.grafana.version}}
+          imagePullPolicy: {{.Values.prometheus.pullPolicy}}
           name: grafana
           ports:
             - containerPort: 3000
+              name: grafanaport
               protocol: TCP
-          startupProbe:
-            exec:
-              command:
-                - sh
-                - -c
-                - |
-                  #!/usr/bin/env bash -e
-                  wget -qO - http://prometheus-service:8080/-/ready
-            failureThreshold: 10
-            periodSeconds: 20
           livenessProbe:
-            exec:
-               command:
-                - sh
-                - -c
-                - |
-                  #!/usr/bin/env bash -e
-                  wget -qO - http://prometheus-service:8080/-/ready
+            httpGet:
+              path: /metrics
+              port: grafanaport
+            initialDelaySeconds: 10
             failureThreshold: 5
-            periodSeconds: 10
           readinessProbe:
-            exec:
-               command:
-                - sh
-                - -c
-                - |
-                  #!/usr/bin/env bash -e
-                  wget -qO - http://prometheus-service:8080/-/ready
-            failureThreshold: 5
-            periodSeconds: 10
+            httpGet:
+              path: /api/health
+              port: grafanaport
+            initialDelaySeconds: 10
+            failureThreshold: 5 
           resources:
             requests:
               memory: {{.Values.prometheus.grafana.memoryrequested}}

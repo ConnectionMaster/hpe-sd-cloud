@@ -1,9 +1,9 @@
-{{- if  (.Values.elk.enabled)  }}
+{{- if  and (eq (include "elk.enabled" .) "true") (.Values.elk.filebeat.enabled) }}
 apiVersion: v1
 kind: ConfigMap
 metadata:
   name: filebeat-config
-  namespace: {{.Values.servicedirectorNamespace}}
+  namespace: {{.Release.Namespace}}
   labels:
     k8s-app: filebeatconfig
     kubernetes.io/cluster-service: "true"
@@ -53,21 +53,23 @@ data:
       multiline.negate: true
       multiline.match: after
 
-
     output.logstash:
-      hosts: ["logstash-service.{{.Values.monitoringNamespace}}.svc.cluster.local:5044"]
-      
+ {{- if  (.Values.elk.filebeat.logstashserver)  }}    
+      hosts: ["{{.Values.elk.filebeat.logstashserver }}"]
+ {{- else }}     
+      hosts: ["logstash-service.{{ template "monitoring.namespace" . }}.svc.cluster.local"] 
+{{- end }}      
     http.enabled: true
           
 {{- end }}
 ---
 
-{{- if  (.Values.elk.enabled)  }}
+{{- if  and (eq (include "elk.enabled" .) "true") (.Values.elk.filebeat.enabled) }}
 apiVersion: v1
 kind: ConfigMap
 metadata:
   name: filebeat-config-ui
-  namespace: {{.Values.servicedirectorNamespace}}
+  namespace: {{.Release.Namespace}}
   labels:
     k8s-app: filebeatconfig
     kubernetes.io/cluster-service: "true"
@@ -86,8 +88,11 @@ data:
       multiline.match: after
 
     output.logstash:
-      hosts: ["logstash-service.{{.Values.monitoringNamespace}}.svc.cluster.local:5044"]
-      
+{{- if  (.Values.elk.filebeat.logstashserver)  }}    
+      hosts: ["{{.Values.elk.filebeat.logstashserver }}"]
+ {{- else }}     
+      hosts: ["logstash-service.{{ template "monitoring.namespace" . }}.svc.cluster.local:5044"] 
+{{- end }} 
     http.enabled: true
           
 {{- end }}

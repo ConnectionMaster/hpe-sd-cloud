@@ -9,11 +9,11 @@ LABEL org.label-schema.vendor="Hewlett Packard Enterprise"
 
 # Install dependencies for Service Activator
 
-RUN yum install -y \
+RUN dnf install -y \
                 java-11-openjdk-devel \
                 jq \
                 && \
-    yum clean all && rm -rf /var/cache/yum
+    dnf clean all && rm -fr /var/cache/dnf
 
 # Copy Ansible roles
 
@@ -31,7 +31,20 @@ COPY ./assets/ansible /docker/ansible
 
 # Install components with Ansible
 
-RUN cd /docker/ansible && ansible-playbook -vvvv install.yml -c local -i localhost,
+RUN cd /docker/ansible && \
+    ansible-playbook -vvvv install.yml -c local -i localhost, && \
+    chmod -R o=u,a+w \
+        /opt/OV/ServiceActivator \
+        /etc/opt/OV/ServiceActivator \
+        /var/opt/OV/ServiceActivator \
+        /opt/HP/jboss \
+    && \
+    dnf clean all && rm -fr /var/cache/dnf && \
+    rm -fr \
+        /var/opt/OV/ServiceActivator/patch/*/backup \
+        /var/opt/OV/ServiceActivator/patch/*/log/* \
+        /var/opt/OV/ServiceActivator/log/* \
+        /var/log/*
 
 # Remove installation packages from image
 

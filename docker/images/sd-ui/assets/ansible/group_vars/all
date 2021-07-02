@@ -1,4 +1,6 @@
 sd_dist_path: /docker/iso
 internet_access: yes
+uoc_configure_service: no
 uoc_enable_service: no
 sdui_install_assurance: no
+install_omui: no
